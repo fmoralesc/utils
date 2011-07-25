@@ -14,7 +14,7 @@ class WordCounter(gtk.Window):
 			print "wordcounter: No file to watch."
 			gtk.main_quit()
 
-		self._past_wordcount = 0
+#		self._past_wordcount = 0
 
 		self.set_type_hint(gtk.gdk.WINDOW_TYPE_HINT_SPLASHSCREEN)
 		self.set_decorated(False)
@@ -35,16 +35,16 @@ class WordCounter(gtk.Window):
 		if font is not None:
 			self.label.modify_font(pango.FontDescription(font + " 16"))
 		label_eventbox.add(self.label)
-		diff_eventbox = gtk.EventBox()
-		diff_eventbox.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse("#39312C"))
-		self.diff = gtk.Label()
-		self.diff.modify_fg(gtk.STATE_NORMAL, gtk.gdk.color_parse("#15DFF3"))
-		if font is not None:
-			self.diff.modify_font(pango.FontDescription(font + " 6"))
-		self.diff.set_text("...")
-		diff_eventbox.add(self.diff)
+#		diff_eventbox = gtk.EventBox()
+#		diff_eventbox.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse("#39312C"))
+#		self.diff = gtk.Label()
+#		self.diff.modify_fg(gtk.STATE_NORMAL, gtk.gdk.color_parse("#15DFF3"))
+#		if font is not None:
+#			self.diff.modify_font(pango.FontDescription(font + " 6"))
+#		self.diff.set_text("...")
+#		diff_eventbox.add(self.diff)
 		labels.pack_start(label_eventbox)
-		labels.pack_start(diff_eventbox)
+#		labels.pack_start(diff_eventbox)
 		self.add(labels)
 	
 		self._update()
@@ -65,21 +65,21 @@ class WordCounter(gtk.Window):
 	def _update(self):
 		self._current_wordcount = self._get_wordcount()
 		self.label.set_text(self._current_wordcount)
-		diff = int(self._current_wordcount) - int(self._past_wordcount)
-		head = ""
-		if diff > 0:
-			state_color = "#15DFF3"
-			head = "+"
-		elif diff < 0:
-			state_color = "#ff6600"
-		elif diff == 0:
-			state_color = "#15DFF3"
-			diff = "="
-		else:
-			state_color = "#15DFF3"
-		self.diff.modify_fg(gtk.STATE_NORMAL, gtk.gdk.color_parse(state_color))
-		self.diff.set_text(head + str(diff))
-		self._past_wordcount = self._current_wordcount
+#		diff = int(self._current_wordcount) - int(self._past_wordcount)
+#		head = ""
+#		if diff > 0:
+#			state_color = "#15DFF3"
+#			head = "+"
+#		elif diff < 0:
+#			state_color = "#ff6600"
+#		elif diff == 0:
+#			state_color = "#15DFF3"
+#			diff = "="
+#		else:
+#			state_color = "#15DFF3"
+#		self.diff.modify_fg(gtk.STATE_NORMAL, gtk.gdk.color_parse(state_color))
+#		self.diff.set_text(head + str(diff))
+#		self._past_wordcount = self._current_wordcount
 
 	def on_monitor_event(self, monitor, gfile, other_file, event):
 		if event is gio.FILE_MONITOR_EVENT_CHANGES_DONE_HINT:
