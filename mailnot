@@ -1,0 +1,92 @@
+#!/usr/bin/python2
+
+import sys
+import argparse
+import gtk
+import gobject
+import gnomekeyring
+import urllib2
+import feedparser
+import pynotify
+from subprocess import Popen
+
+class MailNotifier(gobject.GObject):
+	def __init__(self, username, password):
+		pass_mgr = urllib2.HTTPPasswordMgrWithDefaultRealm()
+		pass_mgr.add_password(None, "https://mail.google.com", username, password)
+		handler = urllib2.HTTPBasicAuthHandler(pass_mgr)
+		self.opener = urllib2.build_opener(handler)
+		
+		pynotify.init(username)
+		self.notification = pynotify.Notification("")
+		self.notification.set_property("icon-name", "mail-unread")
+		self.notification.add_action("default", "Open client", self.open_client)
+
+		gobject.timeout_add(60000, self.check_feed)
+		self.check_feed()
+
+	def check_feed(self, *args):
+		try:
+			feed_data = self.opener.open("https://mail.google.com/mail/feed/atom").read()
+		except:
+			del self
+		feed = feedparser.parse(feed_data)
+		count = int(feed.feed.fullcount)
+		if count > 0:
+			if count == 1:
+				email = feed.entries[0]
+				self.notification.set_property("summary", "Got email from " + email.author)
+				self.notification.set_property("body", "<b>" + email.title + "</b>\n" + email.summary )
+			else:
+				self.notification.set_property("summary", "Got " + str(count) + " unread e-mails")
+				emails = []
+				for entry in feed.entries:
+					emails.append(entry.author_detail.name + ": <b>" + entry.title + "</b>")
+				self.notification.set_property("body", "\n\n".join(emails))
+			self.notification.show()
+		else:
+			self.notification.close()
+		return True
+	
+	def open_client(self, *args):
+		Popen(["thunderbird"])
+
+class MailNotifiersHandler(gobject.GObject):
+	def __init__(self):
+		if len(sys.argv) > 1:
+			p = argparse.ArgumentParser(description="GMail notifier")
+			subparsers = p.add_subparsers()
+
+			p_add = subparsers.add_parser('add')
+			p_add.add_argument('--username', '-u', type=str)
+			p_add.add_argument('--password', '-p', type=str)
+			p_add.set_defaults(func=self.add_account)
+			args = p.parse_args()
+			args.func(args)
+
+		accounts = []
+		for id in gnomekeyring.list_item_ids_sync("login"):
+			item = gnomekeyring.item_get_info_sync("login", id)
+			if item.get_display_name().startswith("mailnot"):
+				username = item.get_display_name().split(":")[1]
+				password = item.get_secret()
+				accounts.append((username, password))
+
+		if len(accounts) == 0:
+			print "mailnot: ERROR: No configured account.\n \
+			Please add an account with\n \
+			\tmailnot add -u LOGIN -p PASSWORD"
+			sys.exit()
+		
+		for account in accounts:
+			MailNotifier(account[0], account[1])
+		gtk.main()
+
+	def add_account(self, args):
+		if args.username and args.password:
+			gnomekeyring.item_create_sync("login", gnomekeyring.ITEM_NETWORK_PASSWORD, 
+							"mailnot:" + args.username, {}, args.password, False)
+		sys.exit()
+
+if __name__ == "__main__":
+	MailNotifiersHandler()
