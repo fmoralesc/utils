@@ -4,6 +4,7 @@ import sys
 import argparse
 import gtk
 import gobject
+import gconf
 import gnomekeyring
 import urllib2
 import feedparser
@@ -49,7 +50,12 @@ class MailNotifier(gobject.GObject):
 		return True
 	
 	def open_client(self, *args):
-		Popen(["thunderbird"])
+		try:
+			Popen([gconf.client_get_default().\
+					get("/desktop/gnome/url-handlers/mailto/command").\
+					get_string().split()[0]])
+		except:
+			pass
 
 class MailNotifiersHandler(gobject.GObject):
 	def __init__(self):
