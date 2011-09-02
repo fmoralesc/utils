@@ -21,6 +21,7 @@ class MailNotifier(gobject.GObject):
 		pynotify.init(username)
 		self.notification = pynotify.Notification("")
 		self.notification.set_property("icon-name", "mail-unread")
+		self.notification.set_category("email.arrived")
 		self.notification.add_action("default", "Open client", self.open_client)
 
 		gobject.timeout_add(60000, self.check_feed)
@@ -30,7 +31,7 @@ class MailNotifier(gobject.GObject):
 		try:
 			feed_data = self.opener.open("https://mail.google.com/mail/feed/atom").read()
 		except:
-			del self
+			return True # we'll try again next round
 		feed = feedparser.parse(feed_data)
 		count = int(feed.feed.fullcount)
 		if count > 0:
