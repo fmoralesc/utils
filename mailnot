@@ -10,7 +10,14 @@ import gnomekeyring
 import urllib2
 import feedparser
 import pynotify
+import dateutil.parser
+import dateutil.tz
 from subprocess import Popen
+
+def get_local_time(datetime):
+	return dateutil.parser.parse(datetime).\
+			astimezone(dateutil.tz.tzlocal()).\
+			strftime("%d %b %Y %H:%M")
 
 class MailNotifier(gobject.GObject):
 	def __init__(self, username, password):
@@ -21,11 +28,10 @@ class MailNotifier(gobject.GObject):
 		
 		pynotify.init(username)
 		self.notification = pynotify.Notification("")
-		self.notification.set_property("icon-name", "mail-unread")
-		self.notification.set_category("email.arrived")
-		self.notification.add_action("default", "Open client", self.open_client)
 
-		gobject.timeout_add(60000, self.check_feed)
+		self.seen_emails = []
+
+		gobject.timeout_add(30000, self.check_feed)
 		self.check_feed()
 
 	def check_feed(self, *args):
@@ -33,24 +39,32 @@ class MailNotifier(gobject.GObject):
 			feed_data = self.opener.open("https://mail.google.com/mail/feed/atom").read()
 		except:
 			return True # we'll try again next round
-		feed = feedparser.parse(feed_data)
-		count = int(feed.feed.fullcount)
-		if count > 0:
-			if count == 1:
-				email = feed.entries[0]
-				self.notification.set_property("summary", "Got email from " + email.author)
-				self.notification.set_property("body", "<b>" + email.title + "</b>\n" + email.summary )
-			else:
-				self.notification.set_property("summary", "Got " + str(count) + " unread e-mails")
-				emails = []
-				for entry in feed.entries:
-					emails.append(entry.author_detail.name + ": <b>" + entry.title + "</b>")
-				self.notification.set_property("body", "\n\n".join(emails))
-			self.notification.show()
-		else:
-			self.notification.close()
+		try:
+			feed = feedparser.parse(feed_data)
+		except:
+			return True
+		
+		for email in self.seen_emails:
+			email.close()
+		self.seen_emails = []
+		
+		if feed.feed.fullcount > 0:
+			for entry in feed.entries:
+				title = entry.title
+				body = "from <i>" + entry.author_detail.name + \
+						" ("+ entry.author_detail.email + ")</i>" + \
+						", @" + get_local_time(entry.issued)
+
+				notification = pynotify.Notification("You got mail!")
+				notification.set_property("icon-name", "mail-unread")
+				notification.set_property("summary", title)
+				notification.set_property("body", body)
+				notification.set_category("email.arrived")
+				notification.add_action("default", "Open client", self.open_client)
+				notification.show()
+				self.seen_emails.append(notification)
 		return True
-	
+
 	def open_client(self, *args):
 		try:
 			Popen([basename(gconf.client_get_default().\
