@@ -1,0 +1,32 @@
+# fmoralesc utils
+
+A collection of small single-purpose programs.
+
+* **mailnot**: a gmail notifier for gnome 3.
+
+* **osd-wordcounter**: tracks onscreen the wordcount of a file.
+
+* **process-info**: get a description of a process by name or pid.
+
+## mailnot
+
+mailnot can track multiple accounts. You must set them up like this:
+
+    $ mailnot add --username EMAIL --password PASS
+
+The password is saved in the gnome-keyring.
+
+Clicking on the notification opens the preferred email application (per gnome
+settings).
+
+## osd-wordcounter
+
+    $ osd-wordcounter essay.mkd
+
+## process-info
+
+    $ process-info htop
+	> interactive process viewer
+
+	$ process-info 32001
+	> zsh: The Z shell
