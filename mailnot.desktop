@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=mailnot
+Comment=GMail Notifier for GNOME 3
+TryExec=mailnot
+Exec=mailnot
+Icon=mail-new
+Terminal=false
+Type=Application
+Categories=GNOME;Internet;
