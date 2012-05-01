@@ -10,6 +10,16 @@ A collection of small single-purpose programs.
 
 ## mailnot
 
+### Requirements
+
+* python2-requests
+* python2-gnomekeyring
+* python2-feedparser
+* python2-pynotify
+* python2-dateutil
+* pygtk
+* python2-gobject
+
 mailnot can track multiple accounts. You must set them up like this:
 
     $ mailnot add --username EMAIL --password PASS
