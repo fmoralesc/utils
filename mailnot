@@ -1,18 +1,18 @@
 #!/usr/bin/python2
 
-from os.path import basename
 import sys
 import argparse
+from os.path import basename
+from subprocess import Popen
 import gtk
 import gobject
 import gconf
 import gnomekeyring
-import urllib2
-import feedparser
 import pynotify
 import dateutil.parser
 import dateutil.tz
-from subprocess import Popen
+import requests
+import feedparser
 
 def get_local_time(datetime):
     return dateutil.parser.parse(datetime).\
@@ -20,22 +20,19 @@ def get_local_time(datetime):
             strftime("%d %b %Y %H:%M")
 
 class MailNotifier(gobject.GObject):
-    def __init__(self, username, password, timeout=1000):
+    def __init__(self, username, password, check_every_n_minutes=30, timeout=0.1):
         pynotify.init(username)
         self.notification = pynotify.Notification("")
         self.seen_emails = []
 
-        gobject.timeout_add(timeout, self.check_feed, username, password)
-        self.check_feed(username, password)
+        gobject.timeout_add(int(check_every_n_minutes * 60000), self.check_feed, username, password, timeout)
+        self.check_feed(username, password, timeout)
 
-    def check_feed(self, username, password, *args):
-        sys.stderr.write("checking feed for " + username + "\n")
-        pass_mgr = urllib2.HTTPPasswordMgrWithDefaultRealm()
-        pass_mgr.add_password(None, "https://mail.google.com", username, password)
-        handler = urllib2.HTTPBasicAuthHandler(pass_mgr)
-        opener = urllib2.build_opener(handler)
+    def check_feed(self, username, password, timeout, *args):
+        sys.stderr.write("mailnot: checking feed for " + username + "\n")
         try:
-            feed_data = opener.open("https://mail.google.com/mail/feed/atom").read()
+            feed_data = requests.get("https://mail.google.com/mail/feed/atom", \
+                    auth=(username, password), timeout=timeout).text
         except:
             return True
 
@@ -95,7 +92,7 @@ class MailNotifiersHandler(gobject.GObject):
             sys.exit()
 
         for account in accounts:
-            sys.stdout.write("Will check for emails in " + account[0] + "\n")
+            sys.stderr.write("mailnot: will check emails for " + account[0] + "\n")
             MailNotifier(account[0], account[1])
         gtk.main()
 
