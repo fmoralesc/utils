@@ -14,15 +14,9 @@ import dateutil.tz
 import requests
 import feedparser
 
-def get_local_time(datetime):
-    return dateutil.parser.parse(datetime).\
-            astimezone(dateutil.tz.tzlocal()).\
-            strftime("%d %b %Y %H:%M")
-
 class MailNotifier(gobject.GObject):
     def __init__(self, username, password, check_every_n_minutes=30, timeout=0.1):
         pynotify.init(username)
-        self.notification = pynotify.Notification("")
         self.seen_emails = []
 
         gobject.timeout_add(int(check_every_n_minutes * 60000), self.check_feed, username, password, timeout)
@@ -36,18 +30,24 @@ class MailNotifier(gobject.GObject):
         except:
             return True
 
-        feed = feedparser.parse(feed_data)
+        try:
+            feed = feedparser.parse(feed_data)
+        except:
+            return True
 
         for email in self.seen_emails:
             email.close()
         self.seen_emails = []
 
         if feed.feed.fullcount > 0:
+            sys.stderr.write("mailnot:\t got " + feed.feed.fullcount + " emails\n")
             for entry in feed.entries:
                 title = entry.title
                 body = "from <i>" + entry.author_detail.name + \
                         " ("+ entry.author_detail.email + ")</i>" + \
-                        ", @" + get_local_time(entry.issued)
+                        ", @" + dateutil.parser.parse(entry.issued).\
+                                    astimezone(dateutil.tz.tzlocal()).\
+                                    strftime("%d %b %Y %H:%M")
 
                 notification = pynotify.Notification("You got mail!")
                 notification.set_property("icon-name", "mail-unread")
