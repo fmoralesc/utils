@@ -15,100 +15,95 @@ import dateutil.tz
 from subprocess import Popen
 
 def get_local_time(datetime):
-	return dateutil.parser.parse(datetime).\
-			astimezone(dateutil.tz.tzlocal()).\
-			strftime("%d %b %Y %H:%M")
+    return dateutil.parser.parse(datetime).\
+            astimezone(dateutil.tz.tzlocal()).\
+            strftime("%d %b %Y %H:%M")
 
 class MailNotifier(gobject.GObject):
-	def __init__(self, username, password):
-		pass_mgr = urllib2.HTTPPasswordMgrWithDefaultRealm()
-		pass_mgr.add_password(None, "https://mail.google.com", username, password)
-		handler = urllib2.HTTPBasicAuthHandler(pass_mgr)
-		self.opener = urllib2.build_opener(handler)
-		
-		pynotify.init(username)
-		self.notification = pynotify.Notification("")
+    def __init__(self, username, password, timeout=1000):
+        pynotify.init(username)
+        self.notification = pynotify.Notification("")
+        self.seen_emails = []
 
-		self.seen_emails = []
+        gobject.timeout_add(timeout, self.check_feed, username, password)
+        self.check_feed(username, password)
 
-		gobject.timeout_add(30000, self.check_feed)
-		self.check_feed()
+    def check_feed(self, username, password, *args):
+        sys.stderr.write("checking feed for " + username + "\n")
+        pass_mgr = urllib2.HTTPPasswordMgrWithDefaultRealm()
+        pass_mgr.add_password(None, "https://mail.google.com", username, password)
+        handler = urllib2.HTTPBasicAuthHandler(pass_mgr)
+        opener = urllib2.build_opener(handler)
+        try:
+            feed_data = opener.open("https://mail.google.com/mail/feed/atom").read()
+        except:
+            return True
 
-	def check_feed(self, *args):
-		try:
-			feed_data = self.opener.open("https://mail.google.com/mail/feed/atom").read()
-		except:
-			return True # we'll try again next round
-		try:
-			feed = feedparser.parse(feed_data)
-		except:
-			return True
-		
-		for email in self.seen_emails:
-			email.close()
-		self.seen_emails = []
-		
-		if feed.feed.fullcount > 0:
-			for entry in feed.entries:
-				title = entry.title
-				body = "from <i>" + entry.author_detail.name + \
-						" ("+ entry.author_detail.email + ")</i>" + \
-						", @" + get_local_time(entry.issued)
+        feed = feedparser.parse(feed_data)
 
-				notification = pynotify.Notification("You got mail!")
-				notification.set_property("icon-name", "mail-unread")
-				notification.set_property("summary", title)
-				notification.set_property("body", body)
-				notification.set_category("email.arrived")
-				notification.add_action("default", "Open client", self.open_client)
-				notification.show()
-				self.seen_emails.append(notification)
-		return True
+        for email in self.seen_emails:
+            email.close()
+        self.seen_emails = []
 
-	def open_client(self, *args):
-		try:
-			Popen([basename(gconf.client_get_default().\
-					get("/desktop/gnome/url-handlers/mailto/command").\
-					get_string().split()[0])])
-		except:
-			pass
+        if feed.feed.fullcount > 0:
+            for entry in feed.entries:
+                title = entry.title
+                body = "from <i>" + entry.author_detail.name + \
+                        " ("+ entry.author_detail.email + ")</i>" + \
+                        ", @" + get_local_time(entry.issued)
+
+                notification = pynotify.Notification("You got mail!")
+                notification.set_property("icon-name", "mail-unread")
+                notification.set_property("summary", title)
+                notification.set_property("body", body)
+                notification.set_category("email.arrived")
+                notification.add_action("default", "Open client", self.open_client)
+                notification.show()
+                self.seen_emails.append(notification)
+        return True
+
+    def open_client(self, *args):
+        Popen([basename(gconf.client_get_default().\
+                get("/desktop/gnome/url-handlers/mailto/command").\
+                get_string().split()[0])])
 
 class MailNotifiersHandler(gobject.GObject):
-	def __init__(self):
-		if len(sys.argv) > 1:
-			p = argparse.ArgumentParser(description="GMail notifier")
-			subparsers = p.add_subparsers()
+    def __init__(self):
+        if len(sys.argv) > 1:
+            p = argparse.ArgumentParser(description="GMail notifier")
+            subparsers = p.add_subparsers()
 
-			p_add = subparsers.add_parser('add')
-			p_add.add_argument('--username', '-u', type=str)
-			p_add.add_argument('--password', '-p', type=str)
-			p_add.set_defaults(func=self.add_account)
-			args = p.parse_args()
-			args.func(args)
+            p_add = subparsers.add_parser('add')
+            p_add.add_argument('--username', '-u', type=str)
+            p_add.add_argument('--password', '-p', type=str)
+            p_add.set_defaults(func=self.add_account)
+            args = p.parse_args()
+            args.func(args)
 
-		accounts = []
-		for id in gnomekeyring.list_item_ids_sync("login"):
-			item = gnomekeyring.item_get_info_sync("login", id)
-			if item.get_display_name().startswith("mailnot"):
-				username = item.get_display_name().split(":")[1]
-				password = item.get_secret()
-				accounts.append((username, password))
+        accounts = []
+        for id in gnomekeyring.list_item_ids_sync("login"):
+            item = gnomekeyring.item_get_info_sync("login", id)
+            if item.get_display_name().startswith("mailnot"):
+                username = item.get_display_name().split(":")[1]
+                password = item.get_secret()
+                accounts.append((username, password))
 
-		if len(accounts) == 0:
-			print "mailnot: ERROR: No configured account.\n \
-			Please add an account with\n \
-			\tmailnot add -u LOGIN -p PASSWORD"
-			sys.exit()
-		
-		for account in accounts:
-			MailNotifier(account[0], account[1])
-		gtk.main()
+        if len(accounts) == 0:
+            print "mailnot: ERROR: No configured account.\n \
+                    Please add an account with\n \
+                    \tmailnot add -u LOGIN -p PASSWORD"
+            sys.exit()
 
-	def add_account(self, args):
-		if args.username and args.password:
-			gnomekeyring.item_create_sync("login", gnomekeyring.ITEM_NETWORK_PASSWORD, 
-							"mailnot:" + args.username, {}, args.password, False)
-		sys.exit()
+        for account in accounts:
+            sys.stdout.write("Will check for emails in " + account[0] + "\n")
+            MailNotifier(account[0], account[1])
+        gtk.main()
+
+    def add_account(self, args):
+        if args.username and args.password:
+            gnomekeyring.item_create_sync("login", gnomekeyring.ITEM_NETWORK_PASSWORD,
+                    "mailnot:" + args.username, {}, args.password, False)
+            sys.exit()
 
 if __name__ == "__main__":
-	MailNotifiersHandler()
+    MailNotifiersHandler()
