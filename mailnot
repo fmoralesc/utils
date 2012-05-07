@@ -1,29 +1,28 @@
 #!/usr/bin/python2
 
 import sys
+import logging
 import argparse
 from os.path import basename
 from subprocess import Popen
-import gtk
-import gobject
+from gi.repository import GObject, Notify
 import gconf
 import gnomekeyring
-import pynotify
 import dateutil.parser
 import dateutil.tz
 import requests
 import feedparser
 
-class MailNotifier(gobject.GObject):
+class MailNotifier(object):
     def __init__(self, username, password, check_every_n_minutes=30, timeout=1):
-        pynotify.init(username)
+        Notify.init(username)
         self.seen_emails = []
 
-        gobject.timeout_add(int(check_every_n_minutes * 60000), self.check_feed, username, password, timeout)
+        GObject.timeout_add(int(check_every_n_minutes * 60000), self.check_feed, username, password, timeout)
         self.check_feed(username, password, timeout)
 
     def check_feed(self, username, password, timeout, *args):
-        sys.stderr.write("mailnot: checking feed for " + username + "\n")
+        logging.info("mailnot: checking feed for " + username)
         try:
             feed_data = requests.get("https://mail.google.com/mail/feed/atom", \
                     auth=(username, password), timeout=timeout).text
@@ -40,7 +39,7 @@ class MailNotifier(gobject.GObject):
         self.seen_emails = []
 
         if feed.feed.fullcount > 0:
-            sys.stderr.write("mailnot:\t got " + feed.feed.fullcount + " emails\n")
+            logging.info("mailnot:\t got " + feed.feed.fullcount + " emails")
             for entry in feed.entries:
                 title = entry.title
                 body = "from <i>" + entry.author_detail.name + \
@@ -49,12 +48,12 @@ class MailNotifier(gobject.GObject):
                                     astimezone(dateutil.tz.tzlocal()).\
                                     strftime("%d %b %Y %H:%M")
 
-                notification = pynotify.Notification("You got mail!")
+                notification = Notify.Notification()
                 notification.set_property("icon-name", "mail-unread")
                 notification.set_property("summary", title)
                 notification.set_property("body", body)
                 notification.set_category("email.arrived")
-                notification.add_action("default", "Open client", self.open_client)
+                notification.add_action("default", "Open client", self.open_client, None, None)
                 notification.show()
                 self.seen_emails.append(notification)
         return True
@@ -64,7 +63,7 @@ class MailNotifier(gobject.GObject):
                 get("/desktop/gnome/url-handlers/mailto/command").\
                 get_string().split()[0])])
 
-class MailNotifiersHandler(gobject.GObject):
+class MailNotifiersHandler(object):
     def __init__(self):
         if len(sys.argv) > 1:
             p = argparse.ArgumentParser(description="GMail notifier")
@@ -86,15 +85,15 @@ class MailNotifiersHandler(gobject.GObject):
                 accounts.append((username, password))
 
         if len(accounts) == 0:
-            print "mailnot: ERROR: No configured account.\n \
+            logging.error("No configured account.\n \
                     Please add an account with\n \
-                    \tmailnot add -u LOGIN -p PASSWORD"
+                    \tmailnot add -u LOGIN -p PASSWORD")
             sys.exit()
 
         for account in accounts:
-            sys.stderr.write("mailnot: will check emails for " + account[0] + "\n")
+            logging.info("will check emails for " + account[0])
             MailNotifier(account[0], account[1])
-        gtk.main()
+        GObject.MainLoop().run()
 
     def add_account(self, args):
         if args.username and args.password:
