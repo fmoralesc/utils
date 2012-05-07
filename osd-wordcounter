@@ -4,37 +4,37 @@ from subprocess import Popen, PIPE
 import gtk, gio, pango
 
 class WordCounter(gtk.Window):
-	def __init__(self, file_to_watch=None, font="Inconsolata bold"):
-		gtk.Window.__init__(self)
-		if file_to_watch is not None:
-			self._file = gio.File(file_to_watch)
-			mon = self._file.monitor()
-			mon.connect("changed", self.on_monitor_event)
-		else:
-			print "wordcounter: No file to watch."
-			gtk.main_quit()
+    def __init__(self, file_to_watch=None, font="Inconsolata bold"):
+        gtk.Window.__init__(self)
+        if file_to_watch is not None:
+            self._file = gio.File(file_to_watch)
+            mon = self._file.monitor()
+            mon.connect("changed", self.on_monitor_event)
+        else:
+            print "wordcounter: No file to watch."
+            gtk.main_quit()
 
 #		self._past_wordcount = 0
 
-		self.set_type_hint(gtk.gdk.WINDOW_TYPE_HINT_SPLASHSCREEN)
-		self.set_decorated(False)
-		self.set_skip_taskbar_hint(True)
-		self.set_skip_pager_hint(True)
-		self.set_accept_focus(False)
-		self.set_keep_above(True)
-		self.set_gravity(gtk.gdk.GRAVITY_SOUTH_EAST)
+        self.set_type_hint(gtk.gdk.WINDOW_TYPE_HINT_SPLASHSCREEN)
+        self.set_decorated(False)
+        self.set_skip_taskbar_hint(True)
+        self.set_skip_pager_hint(True)
+        self.set_accept_focus(False)
+        self.set_keep_above(True)
+        self.set_gravity(gtk.gdk.GRAVITY_SOUTH_EAST)
 
-		self.set_colormap(self.get_screen().get_rgba_colormap())
-		self.set_opacity(0.8)
+        self.set_colormap(self.get_screen().get_rgba_colormap())
+        self.set_opacity(0.8)
 
-		labels = gtk.VBox()
-		label_eventbox = gtk.EventBox()
-		label_eventbox.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse("#202020"))
-		self.label = gtk.Label()
-		self.label.modify_fg(gtk.STATE_NORMAL, gtk.gdk.color_parse("#ffcc00"))
-		if font is not None:
-			self.label.modify_font(pango.FontDescription(font + " 16"))
-		label_eventbox.add(self.label)
+        labels = gtk.VBox()
+        label_eventbox = gtk.EventBox()
+        label_eventbox.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse("#202020"))
+        self.label = gtk.Label()
+        self.label.modify_fg(gtk.STATE_NORMAL, gtk.gdk.color_parse("#ffcc00"))
+        if font is not None:
+            self.label.modify_font(pango.FontDescription(font + " 16"))
+        label_eventbox.add(self.label)
 #		diff_eventbox = gtk.EventBox()
 #		diff_eventbox.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse("#39312C"))
 #		self.diff = gtk.Label()
@@ -43,28 +43,28 @@ class WordCounter(gtk.Window):
 #			self.diff.modify_font(pango.FontDescription(font + " 6"))
 #		self.diff.set_text("...")
 #		diff_eventbox.add(self.diff)
-		labels.pack_start(label_eventbox)
+        labels.pack_start(label_eventbox)
 #		labels.pack_start(diff_eventbox)
-		self.add(labels)
-	
-		self._update()
-		
-		self._move()
-		gtk.main()
+        self.add(labels)
 
-	def _move(self, *args):
-		self.show_all()
-		self.show()
-		width, height = self.get_size()
-		self.move(gtk.gdk.screen_width() - width, gtk.gdk.screen_height() - height)
+        self._update()
 
-	def _get_wordcount(self):
-		output = Popen(["wc", "-w", self._file.get_path()], stdout=PIPE).communicate()[0]
-		return output.split()[0]
-	
-	def _update(self):
-		self._current_wordcount = self._get_wordcount()
-		self.label.set_text(self._current_wordcount)
+        self._move()
+        gtk.main()
+
+    def _move(self, *args):
+        self.show_all()
+        self.show()
+        width, height = self.get_size()
+        self.move(gtk.gdk.screen_width() - width, gtk.gdk.screen_height() - height)
+
+    def _get_wordcount(self):
+        output = Popen(["wc", "-w", self._file.get_path()], stdout=PIPE).communicate()[0]
+        return output.split()[0]
+
+    def _update(self):
+        self._current_wordcount = self._get_wordcount()
+        self.label.set_text(self._current_wordcount)
 #		diff = int(self._current_wordcount) - int(self._past_wordcount)
 #		head = ""
 #		if diff > 0:
@@ -81,13 +81,13 @@ class WordCounter(gtk.Window):
 #		self.diff.set_text(head + str(diff))
 #		self._past_wordcount = self._current_wordcount
 
-	def on_monitor_event(self, monitor, gfile, other_file, event):
-		if event is gio.FILE_MONITOR_EVENT_CHANGES_DONE_HINT:
-			self._update()
-			self._move()
+    def on_monitor_event(self, monitor, gfile, other_file, event):
+        if event is gio.FILE_MONITOR_EVENT_CHANGES_DONE_HINT:
+            self._update()
+            self._move()
 
 if __name__ == "__main__":
-	p = argparse.ArgumentParser()
-	p.add_argument('file', type=argparse.FileType('r'))
-	args = p.parse_args()
-	WordCounter(args.file.name)
+    p = argparse.ArgumentParser()
+    p.add_argument('file', type=argparse.FileType('r'))
+    args = p.parse_args()
+    WordCounter(args.file.name)
