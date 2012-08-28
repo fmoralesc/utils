@@ -4,10 +4,12 @@ A collection of small single-purpose programs.
 
 * **mailnot**: a gmail notifier for gnome 3.
 
+* **yd**: a youtube-dl gtk3 frontend.
+
 * **osd-wordcounter**: tracks onscreen the wordcount of a file.
 
 * **process-info**: get a description of a process by name or pid.
-
+t
 ## mailnot
 
 ### Requirements
@@ -27,6 +29,13 @@ The password is saved in the gnome-keyring.
 
 Clicking on the notification opens the preferred email application (per gnome
 settings).
+
+## yd
+
+### requeriments
+
+* python2-gobject
+* youtube-dl
 
 ## osd-wordcounter
 
