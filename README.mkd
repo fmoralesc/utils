@@ -4,6 +4,8 @@ A collection of small single-purpose programs.
 
 * **mailnot**: a gmail notifier for gnome 3.
 
+* **calnot**: a calendar notifier, for use alogn gnome-shell-google-calendar
+
 * **yd**: a youtube-dl gtk3 frontend.
 
 * **osd-wordcounter**: tracks onscreen the wordcount of a file.
@@ -29,6 +31,12 @@ The password is saved in the gnome-keyring.
 
 Clicking on the notification opens the preferred email application (per gnome
 settings).
+
+## calnot
+
+### Requirements
+
+* python2-gobject
 
 ## yd
 

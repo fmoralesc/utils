@@ -1,0 +1,52 @@
+#!/usr/bin/env python2
+
+from re import match
+from collections import namedtuple
+from time import mktime
+from datetime import datetime, timedelta
+from gi.repository import Notify, Gio, GLib
+
+Event = namedtuple('Event', ['name', 'start', 'end'])
+
+class EventsChecker():
+    def __init__(self):
+        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+        self.proxy = Gio.DBusProxy.new_sync(bus,
+                Gio.DBusProxyFlags.NONE, None,
+                'org.gnome.Shell.CalendarServer',
+                '/org/gnome/Shell/CalendarServer',
+                'org.gnome.Shell.CalendarServer',
+                None)
+
+    def getMonthEvents(self):
+        since_d = datetime.now()
+        until_d = since_d + timedelta(days=1)
+        # create the timestamps
+        since, until = map(lambda x: long(mktime(x.timetuple())), (since_d, until_d))
+
+        # pass this as a GVariant with a signature (int64, int64, bool)
+        args = GLib.Variant('(xxb)', (since, until, False))
+        # get events from the calendar service
+        data = self.proxy.call_sync('GetEvents', args,
+                Gio.DBusCallFlags.NONE, -1, None)[0]
+
+        # return an Event namedtuple for every event
+        return [Event(match("^.*(?= \(.*\)$)",i[1]).group(),
+            *map(datetime.fromtimestamp, (i[4], i[5]))) for i in data]
+
+    def getEventsForToday(self):
+        def notfurtherthanaday(time):
+            delta = time.start - datetime.now()
+            return delta.days < 1
+        events = self.getMonthEvents()
+        return filter(notfurtherthanaday, events)
+
+if __name__ == "__main__":
+    Notify.init("check-calendar")
+    events = EventsChecker().getEventsForToday()
+    for i in events:
+        n = Notify.Notification()
+        n.set_property("icon-name", "gnome-calendar")
+        n.set_property("summary", i.name)
+        n.show()
+
