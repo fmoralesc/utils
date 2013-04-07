@@ -7,3 +7,4 @@ Icon=mail-notification
 Terminal=false
 Type=Application
 Categories=GNOME;Internet;
+X-GNOME-UsesNotifications=true
