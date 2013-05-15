@@ -8,54 +8,63 @@ from subprocess import Popen
 from gi.repository import GObject, Notify
 import gconf
 import gnomekeyring
-import dateutil.parser
-import dateutil.tz
-import requests
-import feedparser
+import dateutil.parser, dateutil.tz
+import imaplib
+import email, email.header
 
 class MailNotifier(object):
-    def __init__(self, username, password, check_every_n_minutes=30, timeout=1):
-        Notify.init(username)
-        self.seen_emails = []
+    def __init__(self, username, password, check_every_n_minutes=5, timeout=1):
+        self.username = username
+        self.password = password
 
-        GObject.timeout_add(int(check_every_n_minutes * 60000), self.check_feed, username, password, timeout)
-        self.check_feed(username, password, timeout)
+        Notify.init(self.username)
+        self.notifs = []
 
-    def check_feed(self, username, password, timeout, *args):
-        logging.info("mailnot: checking feed for " + username)
-        try:
-            feed_data = requests.get("https://mail.google.com/mail/feed/atom", \
-                    auth=(username, password), timeout=timeout).text
-        except:
-            return True
+        self.connect_imap()
+        GObject.timeout_add(int(check_every_n_minutes * 60000), self.check_for_new)
+        self.check_for_new()
 
-        try:
-            feed = feedparser.parse(feed_data)
-        except:
-            return True
+    def connect_imap(self):
+        self.G = imaplib.IMAP4_SSL("imap.gmail.com")
+        self.G.login(self.username, self.password)
+        self.G.select("inbox")
 
-        for email in self.seen_emails:
-            email.close()
-        self.seen_emails = []
+    def check_for_new(self):
+        # clear notifications
+        for notif in self.notifs:
+            notif.close()
+        self.notifs = []
 
-        if feed.feed.fullcount > 0:
-            logging.info("mailnot:\t got " + feed.feed.fullcount + " emails")
-            for entry in feed.entries:
-                title = entry.title
-                body = "from <i>" + entry.author_detail.name + \
-                        " ("+ entry.author_detail.email + ")</i>" + \
-                        ", @" + dateutil.parser.parse(entry.issued).\
+        result, data = self.G.uid("search", None, "(UNSEEN)")
+        if result == "OK":
+            uids = data[0].split()
+            for uid in uids:
+                result, data = self.G.uid("fetch", uid, "(BODY[HEADER.FIELDS (FROM SUBJECT DATE)])")
+                if result == "OK":
+                    raw_email = data[0][1]
+                    m = email.message_from_string(raw_email)
+
+                    # we must decode our header
+                    raw_subject = m['Subject']
+                    data, encoding = email.header.decode_header(raw_subject)[0]
+                    if encoding:
+                        title = data.decode(encoding)
+                    else:
+                        title = data
+
+                    body = "from <i>" + m['From'] + "</i>" + \
+                            ", @" + dateutil.parser.parse(m['Date']).\
                                     astimezone(dateutil.tz.tzlocal()).\
                                     strftime("%d %b %Y %H:%M")
 
-                notification = Notify.Notification()
-                notification.set_property("icon-name", "mail-unread")
-                notification.set_property("summary", title)
-                notification.set_property("body", body)
-                notification.set_category("email.arrived")
-                notification.add_action("default", "Open client", self.open_client, None, None)
-                notification.show()
-                self.seen_emails.append(notification)
+                    notification = Notify.Notification()
+                    notification.set_property("icon-name", "mail-unread")
+                    notification.set_property("summary", title)
+                    notification.set_property("body", body)
+                    notification.set_category("email.arrived")
+                    notification.add_action("default", "Open client", self.open_client, None, None)
+                    notification.show()
+                    self.notifs.append(notification)
         return True
 
     def open_client(self, *args):
