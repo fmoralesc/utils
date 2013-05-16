@@ -27,7 +27,6 @@ class MailNotifier(object):
     def connect_imap(self):
         self.G = imaplib.IMAP4_SSL("imap.gmail.com")
         self.G.login(self.username, self.password)
-        self.G.select("inbox")
 
     def check_for_new(self):
         # clear notifications
@@ -35,12 +34,19 @@ class MailNotifier(object):
             notif.close()
         self.notifs = []
 
+        # selecting here because in testing searches sometimes didn't yield
+        # results unless a select was remade.
+        self.G.select("inbox")
         result, data = self.G.uid("search", None, "(UNSEEN)")
         if result == "OK":
             uids = data[0].split()
             for uid in uids:
                 result, data = self.G.uid("fetch", uid, "(BODY[HEADER.FIELDS (FROM SUBJECT DATE)])")
                 if result == "OK":
+                    # since we fetched, email was flagged as SEEN. we must
+                    # unflag it.
+                    self.G.uid("store", uid, '-FLAGS', '\SEEN')
+
                     raw_email = data[0][1]
                     m = email.message_from_string(raw_email)
 
