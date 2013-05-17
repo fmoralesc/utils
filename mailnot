@@ -20,13 +20,15 @@ class MailNotifier(object):
         Notify.init(self.username)
         self.notifs = []
 
-        self.connect_imap()
         GObject.timeout_add(int(check_every_n_minutes * 60000), self.check_for_new)
         self.check_for_new()
 
-    def connect_imap(self):
-        self.G = imaplib.IMAP4_SSL("imap.gmail.com")
-        self.G.login(self.username, self.password)
+    def _decode_header(self, header):
+        data, encoding = email.header.decode_header(header)[0]
+        if encoding:
+            return data.decode(encoding)
+        else:
+            return data
 
     def check_for_new(self):
         # clear notifications
@@ -34,31 +36,28 @@ class MailNotifier(object):
             notif.close()
         self.notifs = []
 
-        # selecting here because in testing searches sometimes didn't yield
+        gmail = imaplib.IMAP4_SSL("imap.gmail.com")
+        gmail.login(self.username, self.password)
+         # selecting here because in testing searches sometimes didn't yield
         # results unless a select was remade.
-        self.G.select("inbox")
-        result, data = self.G.uid("search", None, "(UNSEEN)")
+        gmail.select("inbox")
+        result, data = gmail.uid("search", None, "(UNSEEN)")
         if result == "OK":
             uids = data[0].split()
             for uid in uids:
-                result, data = self.G.uid("fetch", uid, "(BODY[HEADER.FIELDS (FROM SUBJECT DATE)])")
+                result, data = gmail.uid("fetch", uid, "(BODY[HEADER.FIELDS (FROM SUBJECT DATE)])")
                 if result == "OK":
                     # since we fetched, email was flagged as SEEN. we must
                     # unflag it.
-                    self.G.uid("store", uid, '-FLAGS', '\SEEN')
+                    gmail.uid("store", uid, '-FLAGS', '\SEEN')
 
                     raw_email = data[0][1]
                     m = email.message_from_string(raw_email)
 
                     # we must decode our header
-                    raw_subject = m['Subject']
-                    data, encoding = email.header.decode_header(raw_subject)[0]
-                    if encoding:
-                        title = data.decode(encoding)
-                    else:
-                        title = data
+                    title = self._decode_header(m['Subject'])
 
-                    body = "from <i>" + m['From'] + "</i>" + \
+                    body = "from <i>" + self._decode_header(m['From']) + "</i>" + \
                             ", @" + dateutil.parser.parse(m['Date']).\
                                     astimezone(dateutil.tz.tzlocal()).\
                                     strftime("%d %b %Y %H:%M")
