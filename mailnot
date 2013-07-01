@@ -10,12 +10,13 @@ import gconf
 import gnomekeyring
 import dateutil.parser, dateutil.tz
 import imaplib
-import email, email.header
+import email, email.header, re
 
 class MailNotifier(object):
     def __init__(self, username, password, check_every_n_minutes=5, timeout=1):
         self.username = username
         self.password = password
+        self.last_encoding = None
 
         Notify.init(self.username)
         self.notifs = []
@@ -24,11 +25,15 @@ class MailNotifier(object):
         self.check_for_new()
 
     def _decode_header(self, header):
-        data, encoding = email.header.decode_header(header)[0]
-        if encoding:
-            return data.decode(encoding)
-        else:
-            return data
+        header = re.sub(r"(=\?.*\?=)(?!$)", r"\1 ", header)
+        header_data = email.header.decode_header(header)
+        segments = []
+        for segment_data, segment_encoding in header_data:
+            if segment_encoding:
+                segments.append(segment_data.decode(segment_encoding))
+            else:
+                segments.append(segment_data)
+        return ''.join(segments)
 
     def check_for_new(self):
         # clear notifications
