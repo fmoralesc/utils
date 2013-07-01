@@ -73,9 +73,18 @@ class MailNotifier(object):
                     notification.set_property("body", body)
                     notification.set_category("email.arrived")
                     notification.add_action("default", "Open client", self.open_client, None, None)
+                    notification.add_action("read", "Mark as read", lambda a, b, c, uid=uid: self.mark_as_read(uid), None, None)
                     notification.show()
                     self.notifs.append(notification)
         return True
+
+    def mark_as_read(self, uid):
+        gmail = imaplib.IMAP4_SSL("imap.gmail.com")
+        gmail.login(self.username, self.password)
+         # selecting here because in testing searches sometimes didn't yield
+        # results unless a select was remade.
+        gmail.select("inbox")
+        gmail.uid("store", uid, '+FLAGS', '\SEEN')
 
     def open_client(self, *args):
         Popen([basename(gconf.client_get_default().\
