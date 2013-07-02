@@ -1,25 +1,23 @@
-#!/usr/bin/python2
+#!/usr/bin/python
 
 import sys
 import logging
 import argparse
 from os.path import basename
 from subprocess import Popen
-from gi.repository import GObject, Notify
-import gconf
-import gnomekeyring
+from gi.repository import GObject, Notify, GnomeKeyring, GLib, GConf
 import dateutil.parser, dateutil.tz
 import imaplib
 import email, email.header, re
 
 class MailNotifier(object):
-    def __init__(self, username, password, check_every_n_minutes=5, timeout=1):
+    def __init__(self, username, password, check_every_n_minutes=0.5, timeout=1):
         self.username = username
         self.password = password
         self.last_encoding = None
 
         Notify.init(self.username)
-        self.notified = []
+        self.notifs = []
 
         GObject.timeout_add(int(check_every_n_minutes * 60000), self.check_for_new)
         self.check_for_new()
@@ -44,50 +42,56 @@ class MailNotifier(object):
         return ''.join(segments)
 
     def check_for_new(self):
+        for notif in self.notifs:
+            notif.close()
+
+        logging.error("checking...")
         gmail = self.connect()
         result, data = gmail.uid("search", None, "(UNSEEN)")
         if result == "OK":
             uids = data[0].split()
+            logging.error("...got " + str(len(uids)) + " unread emails" )
             for uid in uids:
-                if uid not in self.notified:
-                    result, data = gmail.uid("fetch", uid, "(BODY[HEADER.FIELDS (FROM SUBJECT DATE)])")
-                    if result == "OK":
-                        # since we fetched, email was flagged as SEEN. we must
-                        # unflag it.
-                        gmail.uid("store", uid, '-FLAGS', '\SEEN')
+                result, data = gmail.uid("fetch", uid, "(BODY[HEADER.FIELDS (FROM SUBJECT DATE)])")
+                if result == "OK":
+                    # since we fetched, email was flagged as SEEN. we must
+                    # unflag it.
+                    gmail.uid("store", uid, '-FLAGS', '\SEEN')
 
-                        raw_email = data[0][1]
-                        m = email.message_from_string(raw_email)
+                    raw_email = data[0][1]
+                    m = email.message_from_string(raw_email)
 
-                        # we must decode our header
-                        title = self._decode_header(m['Subject'])
+                    # we must decode our header
+                    title = self._decode_header(m['Subject'])
 
-                        body = "from <i>" + self._decode_header(m['From']) + "</i>" + \
-                                ", @" + dateutil.parser.parse(m['Date']).\
-                                        astimezone(dateutil.tz.tzlocal()).\
-                                        strftime("%d %b %Y %H:%M")
+                    body = "from <i>" + self._decode_header(m['From']) + "</i>" + \
+                            ", @" + dateutil.parser.parse(m['Date']).\
+                                    astimezone(dateutil.tz.tzlocal()).\
+                                    strftime("%d %b %Y %H:%M")
 
-                        notification = Notify.Notification()
-                        notification.set_property("icon-name", "mail-unread")
-                        notification.set_property("summary", title)
-                        notification.set_property("body", body)
-                        notification.set_category("email.arrived")
-                        notification.add_action("default", "Open client", self.open_client, None, None)
-                        notification.add_action("mark-read", "Mark as read", lambda n, a, d, uid=uid: self.mark_as_read(uid), None, None)
-                        notification.add_action("trash", "Trash", lambda n, a, d, uid=uid: self.trash(uid), None, None)
-                        notification.add_action("archive", "Archive", lambda n, a, d, uid=uid: self.archive(uid), None, None)
-                        notification.show()
-                        self.notified.append(uid)
+                    notification = Notify.Notification()
+                    notification.set_property("icon-name", "mail-unread")
+                    notification.set_property("summary", title)
+                    notification.set_property("body", body)
+                    notification.set_category("email.arrived")
+                    notification.add_action("default", "Open client", self.open_client, None, None)
+                    notification.add_action("read", "Mark as read", lambda n, a, d, uid=uid: self.mark_as_read(uid), None, None)
+                    notification.add_action("trash", "Trash", lambda n, a, d, uid=uid: self.trash(uid), None, None)
+                    notification.add_action("archive", "Archive", lambda n, a, d, uid=uid: self.archive(uid), None, None)
+                    notification.show()
+                    self.notifs.append(notification)
 
         gmail.logout()
         return True
 
     def mark_as_read(self, uid):
+        logging.error("mark as read " + str(uid))
         gmail = self.connect()
         gmail.uid("store", uid, '+FLAGS', '\SEEN')
         gmail.logout()
 
     def archive(self, uid):
+        logging.error("achive " + str(uid))
         gmail = self.connect()
 
         result = gmail.uid("copy", uid, "[Gmail]/All Mail")
@@ -97,14 +101,16 @@ class MailNotifier(object):
         gmail.logout()
 
     def trash(self, uid):
+        logging.error("trash " + str(uid))
         gmail = self.connect()
         gmail.uid("copy", uid, "[Gmail]/Trash")
         gmail.logout()
 
     def open_client(self, *args):
-        Popen([basename(gconf.client_get_default().\
-                get("/desktop/gnome/url-handlers/mailto/command").\
-                get_string().split()[0])])
+        logging.error("opening client")
+        c = GConf.Client.get_default()
+        val = c.get("/desktop/gnome/url-handlers/mailto/command")
+        Popen([basename(val.get_string().split()[0])])
 
 class MailNotifiersHandler(object):
     def __init__(self):
@@ -120,12 +126,15 @@ class MailNotifiersHandler(object):
             args.func(args)
 
         accounts = []
-        for id in gnomekeyring.list_item_ids_sync("login"):
-            item = gnomekeyring.item_get_info_sync("login", id)
-            if item.get_display_name().startswith("mailnot"):
-                username = item.get_display_name().split(":")[1]
-                password = item.get_secret()
-                accounts.append((username, password))
+        result, k_data = GnomeKeyring.list_item_ids_sync("login")
+        if result == GnomeKeyring.Result.OK:
+            for id in k_data:
+                result, item = GnomeKeyring.item_get_info_sync("login", id)
+                if result == GnomeKeyring.Result.OK:
+                    if item.get_display_name().startswith("mailnot"):
+                        username = item.get_display_name().split(":")[1]
+                        password = item.get_secret()
+                        accounts.append((username, password))
 
         if len(accounts) == 0:
             logging.error("No configured account.\n \
@@ -140,8 +149,8 @@ class MailNotifiersHandler(object):
 
     def add_account(self, args):
         if args.username and args.password:
-            gnomekeyring.item_create_sync("login", gnomekeyring.ITEM_NETWORK_PASSWORD,
-                    "mailnot:" + args.username, {}, args.password, False)
+            GnomeKeyring.item_create_sync("login", GnomeKeyring.ItemType.NETWORK_PASSWORD,
+                    "mailnot:" + args.username, GLib.Array(), args.password, False)
             sys.exit()
 
 if __name__ == "__main__":
