@@ -11,7 +11,7 @@ import imaplib
 import email, email.header, re
 
 class MailNotifier(object):
-    def __init__(self, username, password, check_every_n_minutes=0.5, timeout=1):
+    def __init__(self, username, password, check_every_n_minutes=5, timeout=1):
         self.username = username
         self.password = password
         self.last_encoding = None
@@ -45,12 +45,12 @@ class MailNotifier(object):
         for notif in self.notifs:
             notif.close()
 
-        logging.error("checking...")
+        logging.info("checking...")
         gmail = self.connect()
         result, data = gmail.uid("search", None, "(UNSEEN)")
         if result == "OK":
             uids = data[0].split()
-            logging.error("...got " + str(len(uids)) + " unread emails" )
+            logging.info("... got " + str(len(uids)) + " unread emails" )
             for uid in uids:
                 result, data = gmail.uid("fetch", uid, "(BODY[HEADER.FIELDS (FROM SUBJECT DATE)])")
                 if result == "OK":
@@ -85,13 +85,13 @@ class MailNotifier(object):
         return True
 
     def mark_as_read(self, uid):
-        logging.error("mark as read " + str(uid))
+        logging.info("mark as read " + str(uid))
         gmail = self.connect()
         gmail.uid("store", uid, '+FLAGS', '\SEEN')
         gmail.logout()
 
     def archive(self, uid):
-        logging.error("achive " + str(uid))
+        logging.info("achive " + str(uid))
         gmail = self.connect()
 
         result = gmail.uid("copy", uid, "[Gmail]/All Mail")
@@ -101,13 +101,13 @@ class MailNotifier(object):
         gmail.logout()
 
     def trash(self, uid):
-        logging.error("trash " + str(uid))
+        logging.info("trash " + str(uid))
         gmail = self.connect()
         gmail.uid("copy", uid, "[Gmail]/Trash")
         gmail.logout()
 
     def open_client(self, *args):
-        logging.error("opening client")
+        logging.info("opening client")
         c = GConf.Client.get_default()
         val = c.get("/desktop/gnome/url-handlers/mailto/command")
         Popen([basename(val.get_string().split()[0])])
@@ -154,4 +154,5 @@ class MailNotifiersHandler(object):
             sys.exit()
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     MailNotifiersHandler()
