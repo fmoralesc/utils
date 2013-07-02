@@ -19,7 +19,7 @@ class MailNotifier(object):
         self.last_encoding = None
 
         Notify.init(self.username)
-        self.notifs = []
+        self.notified = []
 
         GObject.timeout_add(int(check_every_n_minutes * 60000), self.check_for_new)
         self.check_for_new()
@@ -44,44 +44,40 @@ class MailNotifier(object):
         return ''.join(segments)
 
     def check_for_new(self):
-        # clear notifications
-        for notif in self.notifs:
-            notif.close()
-        self.notifs = []
-
         gmail = self.connect()
         result, data = gmail.uid("search", None, "(UNSEEN)")
         if result == "OK":
             uids = data[0].split()
             for uid in uids:
-                result, data = gmail.uid("fetch", uid, "(BODY[HEADER.FIELDS (FROM SUBJECT DATE)])")
-                if result == "OK":
-                    # since we fetched, email was flagged as SEEN. we must
-                    # unflag it.
-                    gmail.uid("store", uid, '-FLAGS', '\SEEN')
+                if uid not in self.notified:
+                    result, data = gmail.uid("fetch", uid, "(BODY[HEADER.FIELDS (FROM SUBJECT DATE)])")
+                    if result == "OK":
+                        # since we fetched, email was flagged as SEEN. we must
+                        # unflag it.
+                        gmail.uid("store", uid, '-FLAGS', '\SEEN')
 
-                    raw_email = data[0][1]
-                    m = email.message_from_string(raw_email)
+                        raw_email = data[0][1]
+                        m = email.message_from_string(raw_email)
 
-                    # we must decode our header
-                    title = self._decode_header(m['Subject'])
+                        # we must decode our header
+                        title = self._decode_header(m['Subject'])
 
-                    body = "from <i>" + self._decode_header(m['From']) + "</i>" + \
-                            ", @" + dateutil.parser.parse(m['Date']).\
-                                    astimezone(dateutil.tz.tzlocal()).\
-                                    strftime("%d %b %Y %H:%M")
+                        body = "from <i>" + self._decode_header(m['From']) + "</i>" + \
+                                ", @" + dateutil.parser.parse(m['Date']).\
+                                        astimezone(dateutil.tz.tzlocal()).\
+                                        strftime("%d %b %Y %H:%M")
 
-                    notification = Notify.Notification()
-                    notification.set_property("icon-name", "mail-unread")
-                    notification.set_property("summary", title)
-                    notification.set_property("body", body)
-                    notification.set_category("email.arrived")
-                    notification.add_action("default", "Open client", self.open_client, None, None)
-                    notification.add_action("mark-read", "Mark as read", lambda n, a, d, uid=uid: self.mark_as_read(uid), None, None)
-                    notification.add_action("trash", "Trash", lambda n, a, d, uid=uid: self.trash(uid), None, None)
-                    notification.add_action("archive", "Archive", lambda n, a, d, uid=uid: self.archive(uid), None, None)
-                    notification.show()
-                    self.notifs.append(notification)
+                        notification = Notify.Notification()
+                        notification.set_property("icon-name", "mail-unread")
+                        notification.set_property("summary", title)
+                        notification.set_property("body", body)
+                        notification.set_category("email.arrived")
+                        notification.add_action("default", "Open client", self.open_client, None, None)
+                        notification.add_action("mark-read", "Mark as read", lambda n, a, d, uid=uid: self.mark_as_read(uid), None, None)
+                        notification.add_action("trash", "Trash", lambda n, a, d, uid=uid: self.trash(uid), None, None)
+                        notification.add_action("archive", "Archive", lambda n, a, d, uid=uid: self.archive(uid), None, None)
+                        notification.show()
+                        self.notified.append(uid)
 
         gmail.logout()
         return True
