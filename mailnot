@@ -49,6 +49,7 @@ class MailNotifier(object):
 
         try:
             gmail = self.connect()
+            logging.info("... connected...")
         except:
             return True
 
