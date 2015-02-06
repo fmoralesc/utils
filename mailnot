@@ -112,7 +112,7 @@ class MailNotifier(object):
         del self.notifs[uid]
 
     def archive(self, uid):
-        logging.info("achive " + str(uid))
+        logging.info("archive " + str(uid))
         gmail = self.connect()
 
         result = gmail.uid("copy", uid, "[Gmail]/All Mail")
