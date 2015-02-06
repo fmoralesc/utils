@@ -5,7 +5,7 @@ import logging
 import argparse
 from os.path import basename
 from subprocess import Popen
-from gi.repository import GObject, Notify, GnomeKeyring, GLib, GConf
+from gi.repository import GObject, Notify, GnomeKeyring, GLib
 import dateutil.parser, dateutil.tz
 import imaplib
 import email, email.header, re
@@ -131,10 +131,15 @@ class MailNotifier(object):
 
     def open_client(self, uid):
         logging.info("opening client")
+        gmail = self.connect()
+        thread = gmail.uid("fetch", uid, "(X-GM-THRID X-GM-MSGID)")
+        gmail.logout()
+        thread = re.sub(r'.*\(X-GM-THRID ', r"", str(thread))
+        thread = re.sub(r' X-GM-MSGID.*', r"", thread)
+        thread = int(thread)
+        thread = hex(thread)[2:]
         del self.notifs[uid]
-        c = GConf.Client.get_default()
-        val = c.get("/desktop/gnome/url-handlers/mailto/command")
-        Popen([basename(val.get_string().split()[0])])
+        Popen(["xdg-open", "https://mail.google.com/mail/#inbox/"+thread])
 
 class MailNotifiersHandler(object):
     def __init__(self):
